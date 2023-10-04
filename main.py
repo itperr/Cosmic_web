@@ -168,18 +168,17 @@ for ax, network, model_name in zip(axes, networks, model_names):
     for node in network.nodes():
         x, y, z = network.nodes[node]['pos']
         degree = degrees.get(node, 0)
-        node_size = 0.75 * degree  # Adjust the size scaling factor as needed
+        node_size = 0.75 * degree  
         ax.scatter(x, y, z, c='white', s=node_size, edgecolors='black', linewidths=0.5)
 
     # Customize the plot
     ax.set_facecolor('black')
-    ax.view_init(elev=20, azim=30)  # Adjust the elevation and azimuth angles to rotate the plot
+    ax.view_init(elev=20, azim=30) 
     ax.set_xticks([])
     ax.set_yticks([])
     ax.set_zticks([])
     ax.set_title(f'Cosmic Web - {model_name}', fontsize=14)
 
-# Add a common title for the entire figure
 fig.suptitle('Comparison of Cosmic Web Networks', fontsize=16)
 plt.tight_layout()
 plt.show()
@@ -204,7 +203,7 @@ plt.show()
 
 # AVERAGE CLUSTERING COEFFICIENT, SIZE OF GIANT STRONGLY CONNECTED COMPONENT AS A FUNCTION OF R/N
 # Define a range of values for R or N
-param_values = range(0, 21)  # You can adjust the range as needed
+param_values = range(0, 21)  
 
 # Lists to store clustering coefficients for each model
 clustering_m1 = []
@@ -218,9 +217,9 @@ largest_cc_m3 = []
 
 for param in param_values:
     # Build the networks with the current parameter value
-    G_m1 = build_graph_dist(nodes_data, param)  # Adjust the function based on the parameter (R or N)
-    G_m2 = build_graph_with_N_neighbors(nodes_data, param)  # Adjust the function based on the parameter (R or N)
-    G_m3 = build_network_with_gravity(nodes_data, param, grid_size)  # Adjust the function based on the parameter (R or N)
+    G_m1 = build_graph_dist(nodes_data, param)  
+    G_m2 = build_graph_with_N_neighbors(nodes_data, param)  
+    G_m3 = build_network_with_gravity(nodes_data, param, grid_size)  
 
     # Calculate clustering coefficients accounting for disconnected graphs
     cc_m1 = nx.average_clustering(G_m1) if G_m1.number_of_nodes() > 0 else 0.0
@@ -241,7 +240,7 @@ plt.plot(param_values, clustering_m1, label='M1', marker='o')
 plt.plot(param_values, clustering_m2, label='M2', marker='s')
 plt.plot(param_values, clustering_m3, label='M3', marker='^')
 
-plt.xticks(range(0, 21), range(0, 21))  # Set x-ticks to integer values
+plt.xticks(range(0, 21), range(0, 21))  
 plt.xlabel('Parameter (R or N)')
 plt.ylabel('Average Clustering Coefficient')
 plt.title('Average Clustering Coefficient vs. Parameter')
@@ -255,7 +254,7 @@ plt.plot(param_values, largest_cc_m1, label='M1', marker='o')
 plt.plot(param_values, largest_cc_m2, label='M2', marker='s')
 plt.plot(param_values, largest_cc_m3, label='M3', marker='^')
 
-plt.xticks(range(0, 21), range(0, 21))  # Set x-ticks to integer values
+plt.xticks(range(0, 21), range(0, 21))  
 plt.xlabel('Parameter (R or N)')
 plt.ylabel('Size of Largest Strongly Connected Component')
 plt.title('Size of Largest Strongly Connected Component vs. Parameter')
@@ -377,9 +376,9 @@ galaxy_positions = np.array([pos for _, pos, _ in nodes_data])
 # Calculate Voronoi tessellation
 vor = Voronoi(galaxy_positions)
 
-# Define criteria for voids, walls, and clusters. Parameters still to be adjusted
-void_volume_threshold = 2000  # Adjust as needed
-cluster_volume_threshold = 100  # Adjust as needed
+# Define criteria for voids, walls, and clusters
+void_volume_threshold = 2000  
+cluster_volume_threshold = 100  
 
 void_indices = []
 cluster_indices = []
@@ -565,31 +564,28 @@ surf1 = ax.plot_surface(x_mesh, y_mesh, z_values_m1, cmap='viridis', alpha=0.7)
 surf2 = ax.plot_surface(x_mesh, y_mesh, z_values_m2, cmap='plasma', alpha=0.7)
 surf3 = ax.plot_surface(x_mesh, y_mesh, z_values_m3, cmap='inferno', alpha=0.7)
 
-# Customize the plot labels and title
 ax.set_xlabel('Parameter x')
 ax.set_ylabel('Parameter y')
 ax.set_zlabel('Percentage of Matching IDs')
 ax.set_title('Percentage of Agreement in Node IDs for Different Values of x and y')
 
-# Create color maps with the same colors as the surfaces
+
 cmap_m1 = ListedColormap(surf1.get_cmap()(np.linspace(0.3, 0.9, 256)))
 cmap_m2 = ListedColormap(surf2.get_cmap()(np.linspace(0.3, 0.9, 256)))
 cmap_m3 = ListedColormap(surf3.get_cmap()(np.linspace(0.3, 0.9, 256)))
 
-# Create colorbars using the custom color maps
-cax = fig.add_axes([0.72, 0.15, 0.02, 0.65])  # Adjust position and size as needed
+cax = fig.add_axes([0.72, 0.15, 0.02, 0.65])  
 cbar_m1 = plt.colorbar(surf1, cax=cax, cmap=cmap_m1, orientation='vertical')
 cbar_m1.set_label('Model M1')
 
-cax2 = fig.add_axes([0.82, 0.15, 0.02, 0.65])  # Adjust position and size as needed
+cax2 = fig.add_axes([0.82, 0.15, 0.02, 0.65])  
 cbar_m2 = plt.colorbar(surf2, cax=cax2, cmap=cmap_m2, orientation='vertical')
 cbar_m2.set_label('Model M2')
 
-cax3 = fig.add_axes([0.92, 0.15, 0.02, 0.65])  # Adjust position and size as needed
+cax3 = fig.add_axes([0.92, 0.15, 0.02, 0.65])  
 cbar_m3 = plt.colorbar(surf3, cax=cax3, cmap=cmap_m3, orientation='vertical')
 cbar_m3.set_label('Model M3')
 
-# Show the plot
 plt.show()
 
 # Find the maximum percentage and its corresponding x and y values for each model
