@@ -1,20 +1,18 @@
 import networkx as nx
-import matplotlib.pyplot as plt
-import numpy as np
-from mpl_toolkits.mplot3d import Axes3D
 from sklearn.neighbors import NearestNeighbors
 from scipy.spatial import cKDTree
 import numpy as np
 import matplotlib.pyplot as plt
 import math
-from collections import defaultdict
 from scipy.spatial import Voronoi
-from mpl_toolkits.axes_grid1 import make_axes_locatable
 from matplotlib.colors import ListedColormap
+from scipy.spatial import ConvexHull
+from collections import defaultdict
+from matplotlib.ticker import MultipleLocator
 
 # Read node data from the text file
-nodes_data = []
-with open('tweb', 'r') as file:
+selected_galaxies = []
+with open('selected_galaxies.txt', 'r') as file:
     for line in file:
         columns = line.split()
         node = int(columns[0])  # First column contains the node ID
@@ -22,35 +20,34 @@ with open('tweb', 'r') as file:
         y = float(columns[2])  # Third column contains the y coordinate
         z = float(columns[3])  # Fourth column contains the z coordinate
         mass = float(columns[8])  # Ninth column contains the mass
-        nodes_data.append((node, (x, y, z), mass))
-
+        selected_galaxies.append((node, (x, y, z), mass))
 # M1 MODEL: CONNECT NODES IF THE DISTANCE BETWEEN THEM IS SMALLER THAN R
-def build_graph_dist(nodes_data, distance_threshold):
+def build_graph_dist(selected_galaxies, distance_threshold):
     G = nx.Graph()
 
     # Create a KD-tree for efficient spatial indexing
-    positions = [pos for _, pos, _ in nodes_data]  # Extract positions
+    positions = [pos for _, pos, _ in selected_galaxies]  # Extract positions
     kdtree = cKDTree(positions)
 
     # Add nodes to the graph
-    for node, pos, mass in nodes_data:
+    for node, pos, mass in selected_galaxies:
         G.add_node(node, pos=pos, mass=mass)
 
     # Connect nodes based on distance threshold using KD-tree query
-    for node, pos, mass in nodes_data:
+    for node, pos, mass in selected_galaxies:
         nearby_nodes = kdtree.query_ball_point(pos, distance_threshold)
         for neighbor_node in nearby_nodes:
             if neighbor_node != node:
-                G.add_edge(node, nodes_data[neighbor_node][0])  # Adding edge using node ID
+                G.add_edge(node,selected_galaxies[neighbor_node][0])  # Adding edge using node ID
 
     return G
 
 # M2 MODEL: CONNECT NODES ONLY WITH THE N CLOSEST NEIGHBORS
 # Create a function to build a graph with N closest neighbors for each node
-def build_graph_with_N_neighbors(nodes_data, N):
+def build_graph_with_N_neighbors(selected_galaxies, N):
     G = nx.DiGraph()  # Create an undirected graph
 
-    for node, pos, _ in nodes_data:  # Ignore the mass value using underscore
+    for node, pos, _ in selected_galaxies:  # Ignore the mass value using underscore
         G.add_node(node, pos=pos)
 
     # Find k-nearest neighbors for each node
@@ -67,7 +64,7 @@ def build_graph_with_N_neighbors(nodes_data, N):
     return G
 
 
-# M3 MODEL: CONNECT NODES BASED ON GRAVITATIONAL FORCE
+# M3 MODEL: CONNECT NODES BASED ON N NEIGHBORS WITH STRONGEST GRAVITATIONAL FORCE
 def calculate_gravitational_force(m1, m2, r):
     G = 6.67430e-11  # Gravitational constant
     epsilon = 1e-10  # Small value to avoid division by zero
@@ -77,22 +74,22 @@ def calculate_gravitational_force(m1, m2, r):
 def euclidean_distance(point1, point2):
     return math.sqrt(sum((p2 - p1) ** 2 for p1, p2 in zip(point1, point2)))
 
-def build_network_with_gravity(nodes_data, N, grid_size):
+def build_network_with_gravity(selected_galaxies, N, grid_size):
     G = nx.DiGraph()
 
     # Create a dictionary to store nodes in grid cells
     grid = defaultdict(list)
 
     # Create a dictionary to store node data indexed by node IDs
-    node_dict = {node: (pos, mass) for node, pos, mass in nodes_data}
+    node_dict = {node: (pos, mass) for node, pos, mass in selected_galaxies}
 
     # Populate the grid cells with nodes
-    for node, pos, mass in nodes_data:
+    for node, pos, mass in selected_galaxies:
         x, y, z = pos
         grid[(int(x / grid_size), int(y / grid_size), int(z / grid_size))].append(node)
 
     # Connect nodes based on the N strongest gravitational forces using Euclidean distance and grid
-    for node1, (x1, y1, z1), mass1 in nodes_data:
+    for node1, (x1, y1, z1), mass1 in selected_galaxies:
         grid_x, grid_y, grid_z = int(x1 / grid_size), int(y1 / grid_size), int(z1 / grid_size)
         force_list = []
 
@@ -119,16 +116,16 @@ def build_network_with_gravity(nodes_data, N, grid_size):
 
 
 # M1 MODEL: CONNECT NODES IF THE DISTANCE BETWEEN THEM IS SMALLER THAN R
-R = 7.8
-G_m1 = build_graph_dist(nodes_data, R)
+R = 8
+G_m1 = build_graph_dist(selected_galaxies, R)
 
 # M2 MODEL: CONNECT NODES ONLY WITH THE N CLOSEST NEIGHBORS
-N = 4
-G_m2 = build_graph_with_N_neighbors(nodes_data, N)
+N = 5
+G_m2 = build_graph_with_N_neighbors(selected_galaxies, N)
 
-# M3 MODEL: CONNECT NODES BASED ON GRAVITATIONAL FORCE
+# M3 MODEL: CONNECT NODES BASED ON N NEIGHBORS WITH STRONGEST GRAVITATIONAL FORCE
 grid_size = 5
-G_m3 = build_network_with_gravity(nodes_data, 5, grid_size)
+G_m3 = build_network_with_gravity(selected_galaxies, N, grid_size)
 
 # Create a list of all three models
 networks = [G_m1, G_m2, G_m3]
@@ -136,18 +133,18 @@ model_names = ['M1', 'M2', 'M3']
 
 # Add the 'pos' attribute to the nodes of each network
 for G in [G_m1, G_m2]:
-    for node, pos, _ in nodes_data:
+    for node, pos, _ in selected_galaxies:
         G.nodes[node]['pos'] = pos
 
 # For M3, assign the 'pos' attribute to nodes using a different approach
 for G in [G_m3]:
     for node in G.nodes():
-        pos = nodes_data[node - 1][1]  # Node IDs are 1-indexed
+        pos = selected_galaxies[node - 1][1]  # Node IDs are 1-indexed
         G.nodes[node]['pos'] = pos
 
 # VISUALIZATION
 # Create a figure with subplots
-fig, axes = plt.subplots(1, 3, figsize=(15, 6), subplot_kw={'projection': '3d'})
+fig, axes = plt.subplots(1, 3, figsize=(20, 6), subplot_kw={'projection': '3d'})
 
 for ax, network, model_name in zip(axes, networks, model_names):
     # Plot edges
@@ -156,7 +153,7 @@ for ax, network, model_name in zip(axes, networks, model_names):
         x = [network.nodes[node1]['pos'][0], network.nodes[node2]['pos'][0]]
         y = [network.nodes[node1]['pos'][1], network.nodes[node2]['pos'][1]]
         z = [network.nodes[node1]['pos'][2], network.nodes[node2]['pos'][2]]
-        ax.plot(x, y, z, c='yellow', linewidth=0.5)
+        ax.plot(x, y, z, c='blue', linewidth=0.5)
 
     # Calculate node degrees based on the model
     if model_name == 'M2':
@@ -168,42 +165,25 @@ for ax, network, model_name in zip(axes, networks, model_names):
     for node in network.nodes():
         x, y, z = network.nodes[node]['pos']
         degree = degrees.get(node, 0)
-        node_size = 0.75 * degree  
-        ax.scatter(x, y, z, c='white', s=node_size, edgecolors='black', linewidths=0.5)
+        node_size = 0.35 * degree  # Adjust the size scaling factor as needed
+        ax.scatter(x, y, z, c='violet', s=node_size, edgecolors='black', linewidths=0.5)
 
     # Customize the plot
-    ax.set_facecolor('black')
-    ax.view_init(elev=20, azim=30) 
-    ax.set_xticks([])
-    ax.set_yticks([])
-    ax.set_zticks([])
+    ax.set_facecolor('lightgray')
+    ax.view_init(elev=20, azim=75)  # Adjust the elevation and azimuth angles to rotate the plot
+    ax.set_xlabel('x')
+    ax.set_ylabel('y')
+    ax.set_zlabel('z')
     ax.set_title(f'Cosmic Web - {model_name}', fontsize=14)
 
+# Add a common title for the entire figure
 fig.suptitle('Comparison of Cosmic Web Networks', fontsize=16)
 plt.tight_layout()
 plt.show()
 
-# DEGREE DISTRIBUTIONS (IN-DEGREE FOR M2, M3 SINCE DIRECTED GRAPH)
-# Plot the degree distribution for all models
-plt.figure(figsize=(10, 6))
-
-for G, model_name in zip([G_m1, G_m2, G_m3], ['M1', 'M2', 'M3']):
-    if model_name == 'M1':  # Use degree for M1
-        degrees = dict(G.degree()).values()
-    else:
-        degrees = dict(G.in_degree()).values()  # Use in-degree for M2, M3 since they're directed
-    plt.hist(list(degrees), bins=50, alpha=0.5, label=model_name)
-
-plt.xlabel('Degree')
-plt.ylabel('Frequency')
-plt.title('Degree Distribution for Different Models')
-plt.legend()
-plt.grid()
-plt.show()
-
 # AVERAGE CLUSTERING COEFFICIENT, SIZE OF GIANT STRONGLY CONNECTED COMPONENT AS A FUNCTION OF R/N
 # Define a range of values for R or N
-param_values = range(0, 21)  
+param_values = range(0, 21)
 
 # Lists to store clustering coefficients for each model
 clustering_m1 = []
@@ -217,9 +197,9 @@ largest_cc_m3 = []
 
 for param in param_values:
     # Build the networks with the current parameter value
-    G_m1 = build_graph_dist(nodes_data, param)  
-    G_m2 = build_graph_with_N_neighbors(nodes_data, param)  
-    G_m3 = build_network_with_gravity(nodes_data, param, grid_size)  
+    G_m1 = build_graph_dist(selected_galaxies, param)
+    G_m2 = build_graph_with_N_neighbors(selected_galaxies, param)
+    G_m3 = build_network_with_gravity(selected_galaxies, param, grid_size)
 
     # Calculate clustering coefficients accounting for disconnected graphs
     cc_m1 = nx.average_clustering(G_m1) if G_m1.number_of_nodes() > 0 else 0.0
@@ -236,29 +216,33 @@ for param in param_values:
 
 # Plot the results for CC
 plt.figure(figsize=(10, 6))
-plt.plot(param_values, clustering_m1, label='M1', marker='o')
-plt.plot(param_values, clustering_m2, label='M2', marker='s')
-plt.plot(param_values, clustering_m3, label='M3', marker='^')
+plt.plot(param_values, clustering_m1, label='M1', marker='o', color='b')
+plt.plot(param_values, clustering_m2, label='M2', marker='s', color='r')
+plt.plot(param_values, clustering_m3, label='M3', marker='^', color='g')
 
-plt.xticks(range(0, 21), range(0, 21))  
-plt.xlabel('Parameter (R or N)')
-plt.ylabel('Average Clustering Coefficient')
-plt.title('Average Clustering Coefficient vs. Parameter')
-plt.legend()
+plt.xticks(range(0, 21), range(0, 21))  # Set x-ticks to integer values
+plt.xlabel('Parameter')
+plt.ylabel(r'$\langle C \rangle$')
+plt.title('Average clustering coefficient')
+legend = plt.legend()
+legend.get_frame().set_facecolor('white')
+legend.get_frame().set_edgecolor('black')
 plt.grid()
 plt.show()
 
 # Plot the results for SSC
 plt.figure(figsize=(10, 6))
-plt.plot(param_values, largest_cc_m1, label='M1', marker='o')
-plt.plot(param_values, largest_cc_m2, label='M2', marker='s')
-plt.plot(param_values, largest_cc_m3, label='M3', marker='^')
+plt.plot(param_values, largest_cc_m1, label='M1', marker='o', color='b')
+plt.plot(param_values, largest_cc_m2, label='M2', marker='s', color='r')
+plt.plot(param_values, largest_cc_m3, label='M3', marker='^', color='g')
 
-plt.xticks(range(0, 21), range(0, 21))  
-plt.xlabel('Parameter (R or N)')
-plt.ylabel('Size of Largest Strongly Connected Component')
-plt.title('Size of Largest Strongly Connected Component vs. Parameter')
-plt.legend()
+plt.xticks(range(0, 21), range(0, 21))  # Set x-ticks to integer values
+plt.xlabel('Parameter')
+plt.ylabel(r'$\mathit{S_g}$')
+plt.title('Size of largest strongly connected component')
+legend = plt.legend()
+legend.get_frame().set_facecolor('white')
+legend.get_frame().set_edgecolor('black')
 plt.grid()
 plt.show()
 
@@ -339,46 +323,25 @@ print("    Clustering Coefficient (Random):", clustering_random_m3)
 print("    Avg. Shortest Path Length (Random):", avg_path_length_random_m3)
 print("    Is a Small-World Network:", small_world_m3)
 
-# PLOT HOW THE IN-DEGREE DISTRIBUTION FOR M3 CHANGES AS A FUNCTION OF grid_size TO DETERMINE WHICH VALUE TO USE
-# List to store grid_size values
-grid_sizes = range(1, 11)  # Range of grid_size values
-
-# Create a list to store the in-degree distributions for different grid sizes
-in_degree_distributions = []
-
-# Loop through different grid sizes
-for grid_size in grid_sizes:
-    G_m3 = build_network_with_gravity(nodes_data, N, grid_size)
-    in_degrees = [deg for _, deg in G_m3.in_degree()]
-    in_degree_distributions.append(in_degrees)
-
-# Plot the in-degree distributions using histograms with different colors
-plt.figure(figsize=(10, 6))
-for i, grid_size in enumerate(grid_sizes):
-    plt.hist(
-        in_degree_distributions[i],
-        bins=range(max(in_degree_distributions[i]) + 1),
-        alpha=0.5,
-        label=f'Grid Size {grid_size}',
-    )
-
-plt.xlabel('In-Degree')
-plt.ylabel('Frequency')
-plt.title('In-Degree Distribution of M3 for Different Grid Sizes')
-plt.legend()
-plt.grid()
-plt.show()
-
-# VORONOI
+# VORONOI TESSELLATION
 # Extract galaxy positions
-galaxy_positions = np.array([pos for _, pos, _ in nodes_data])
+galaxy_positions = np.array([pos for _, pos, _ in selected_galaxies])
 
 # Calculate Voronoi tessellation
 vor = Voronoi(galaxy_positions)
 
+# Calculate the volume of each Voronoi cell
+cell_volumes = []
+for region in vor.regions:
+    if not -1 in region and len(region) > 0:
+        polygon = [vor.vertices[i] for i in region]
+        hull = ConvexHull(polygon)
+        cell_volume = hull.volume
+        cell_volumes.append(cell_volume)
+
 # Define criteria for voids, walls, and clusters
-void_volume_threshold = 2000  
-cluster_volume_threshold = 100  
+void_volume_threshold = 26
+cluster_volume_threshold = 8
 
 void_indices = []
 cluster_indices = []
@@ -406,7 +369,7 @@ for i, region in enumerate(vor.regions):
 
 # Write the node IDs and corresponding labels to a text file
 with open('cosmic_web_labels.txt', 'w') as output_file:
-    for node_id in range(len(nodes_data)):
+    for node_id in range(1, len(selected_galaxies)):
         label = -1  # Default label if not identified
         if node_id in void_indices:
             label = 0
@@ -414,16 +377,17 @@ with open('cosmic_web_labels.txt', 'w') as output_file:
             label = 1
         elif node_id in cluster_indices:
             label = 3
-        output_file.write(f"{node_id} {pos[0]} {pos[1]} {pos[2]} {label}\n")
+        pos = selected_galaxies[node_id][1]
+        mass = selected_galaxies[node_id][2]
+        output_file.write(f"{node_id} {pos[0]} {pos[1]} {pos[2]} {mass} {label}\n")
 
-# VISUALIZATION
 # Read the labels from the generated text file
 node_labels = {}
 with open('cosmic_web_labels.txt', 'r') as label_file:
     for line in label_file:
         columns = line.strip().split()  # Split line into columns
         node_id = int(columns[0])  # First column is the ID
-        label = int(columns[4])  # Fifth column is the label
+        label = int(columns[5])  # Sixth column is the label
         node_labels[node_id] = label
 
 # Separate nodes based on their labels
@@ -432,39 +396,46 @@ wall_nodes = [node for node, label in node_labels.items() if label == 1]
 cluster_nodes = [node for node, label in node_labels.items() if label == 3]
 
 # Calculate the percentages
-total_nodes = len(nodes_data)
+total_nodes = len(selected_galaxies)
 void_percentage = len(void_nodes) / total_nodes * 100
 wall_percentage = len(wall_nodes) / total_nodes * 100
 cluster_percentage = len(cluster_nodes) / total_nodes * 100
 
+# VISUALIZATION
 # Create a 3D scatter plot
-fig = plt.figure(figsize=(10, 10))
+fig = plt.figure(figsize=(12, 10))  # Increase the figure size for better readability
 ax = fig.add_subplot(111, projection='3d')
 
 # Plot void nodes
-ax.scatter(galaxy_positions[void_nodes, 0], galaxy_positions[void_nodes, 1], galaxy_positions[void_nodes, 2], c='r', marker='o', s=5, label='Void Nodes')
+ax.scatter(galaxy_positions[void_nodes, 0], galaxy_positions[void_nodes, 1], galaxy_positions[void_nodes, 2], c='b', marker='o', s=3, label='Void nodes')
 
 # Plot wall nodes
-ax.scatter(galaxy_positions[wall_nodes, 0], galaxy_positions[wall_nodes, 1], galaxy_positions[wall_nodes, 2], c='g', marker='^', s=5, label='Wall Nodes')
+ax.scatter(galaxy_positions[wall_nodes, 0], galaxy_positions[wall_nodes, 1], galaxy_positions[wall_nodes, 2], c='g', marker='^', s=3, label='Wall nodes')
 
 # Plot cluster nodes
-ax.scatter(galaxy_positions[cluster_nodes, 0], galaxy_positions[cluster_nodes, 1], galaxy_positions[cluster_nodes, 2], c='b', marker='s', s=5, label='Cluster Nodes')
+ax.scatter(galaxy_positions[cluster_nodes, 0], galaxy_positions[cluster_nodes, 1], galaxy_positions[cluster_nodes, 2], c='r', marker='s', s=3, label='Cluster nodes')
 
 # Add percentage annotations to the plot
-ax.text2D(0.05, 0.95, f"Void Percentage: {void_percentage:.2f}%", transform=ax.transAxes, color='red')
-ax.text2D(0.05, 0.90, f"Wall Percentage: {wall_percentage:.2f}%", transform=ax.transAxes, color='green')
-ax.text2D(0.05, 0.85, f"Cluster Percentage: {cluster_percentage:.2f}%", transform=ax.transAxes, color='blue')
+ax.text2D(0.05, 0.95, f"Void percentage: {void_percentage:.2f}%", transform=ax.transAxes, color='blue')
+ax.text2D(0.05, 0.90, f"Wall percentage: {wall_percentage:.2f}%", transform=ax.transAxes, color='green')
+ax.text2D(0.05, 0.85, f"Cluster percentage: {cluster_percentage:.2f}%", transform=ax.transAxes, color='red')
 
 # Customize the plot
-ax.set_xlabel('X')
-ax.set_ylabel('Y')
-ax.set_zlabel('Z')
-ax.set_title('3D Distribution of Nodes Classified as Void, Cluster, or Wall')
-ax.legend()
+ax.view_init(elev=20, azim=75)  # Adjust the elevation and azimuth angles to rotate the plot
+ax.set_xlabel('x')
+ax.set_ylabel('y')
+ax.set_zlabel('z')
+ax.set_title('Voronoi tessellation classification')
 
+# Add a legend with a shadow for better readability
+legend = plt.legend()
+legend.get_frame().set_facecolor('white')
+legend.get_frame().set_edgecolor('black')
+
+plt.grid(True, linestyle='--', alpha=0.5)  # Add gridlines for better visibility
 plt.show()
 
-# LOOPING THROUGH X
+# LOOPING THROUGH X AND Y
 # Calculate the degree for each node in M1 and the in-degree for each node in M2 and M3
 degrees_m1 = dict(G_m1.degree())
 in_degrees_m2 = dict(G_m2.in_degree())
@@ -480,10 +451,10 @@ def assign_id(d, y, x):
         return 3
 
 # Range of y values to loop through
-y_values = range(1, 21)
+y_values = range(1, 50)
 
 # Range of x values to loop through (dependent on y)
-x_values_list = [range(y+1, 41) for y in y_values]
+x_values_list = [range(y+1, 70) for y in y_values]
 
 # Create a 2D numpy array to store percentage of matching IDs for each network
 percentage_matching_array = np.zeros((len(y_values), len(x_values_list[0]), 3))  # 3 columns for M1, M2, and M3
@@ -515,7 +486,7 @@ for y_index, (y, x_values) in enumerate(zip(y_values, x_values_list)):
             for line in file:
                 columns = line.split()
                 node = int(columns[0])  # Node label from the first column
-                id_from_file = int(columns[4])  # Node ID from the 5th column
+                id_from_file = int(columns[5])  # Node ID from the 6th column
 
                 if id_from_file in [0, 1, 3]:
                     total_count_m1 += 1
@@ -556,36 +527,39 @@ for y_idx, y_val in enumerate(y_values):
         z_values_m3[y_idx, x_idx] = percentage_matching_array[y_idx, x_idx, 2]
 
 # Create a 3D figure
-fig = plt.figure(figsize=(10, 6))
+fig = plt.figure(figsize=(15, 6))
 ax = fig.add_subplot(111, projection='3d')
 
 # Plot the percentage of agreement for each model as a surface plot
-surf1 = ax.plot_surface(x_mesh, y_mesh, z_values_m1, cmap='viridis', alpha=0.7)
-surf2 = ax.plot_surface(x_mesh, y_mesh, z_values_m2, cmap='plasma', alpha=0.7)
-surf3 = ax.plot_surface(x_mesh, y_mesh, z_values_m3, cmap='inferno', alpha=0.7)
+surf1 = ax.plot_surface(x_mesh, y_mesh, z_values_m1, cmap='Blues', alpha=0.7)
+surf2 = ax.plot_surface(x_mesh, y_mesh, z_values_m2, cmap='Oranges', alpha=0.7)
+surf3 = ax.plot_surface(x_mesh, y_mesh, z_values_m3, cmap='Greens', alpha=0.7)
 
-ax.set_xlabel('Parameter x')
+# Customize the plot labels and title
+ax.xaxis.set_major_locator(MultipleLocator(5))
+ax.set_xlabel('Paramater x')
 ax.set_ylabel('Parameter y')
-ax.set_zlabel('Percentage of Matching IDs')
-ax.set_title('Percentage of Agreement in Node IDs for Different Values of x and y')
+ax.set_zlabel('Percentage of matching components')
 
-
+# Create color maps with the same colors as the surfaces
 cmap_m1 = ListedColormap(surf1.get_cmap()(np.linspace(0.3, 0.9, 256)))
 cmap_m2 = ListedColormap(surf2.get_cmap()(np.linspace(0.3, 0.9, 256)))
 cmap_m3 = ListedColormap(surf3.get_cmap()(np.linspace(0.3, 0.9, 256)))
 
-cax = fig.add_axes([0.72, 0.15, 0.02, 0.65])  
+# Create colorbars using the custom color maps
+cax = fig.add_axes([0.72, 0.15, 0.012, 0.55])
 cbar_m1 = plt.colorbar(surf1, cax=cax, cmap=cmap_m1, orientation='vertical')
 cbar_m1.set_label('Model M1')
 
-cax2 = fig.add_axes([0.82, 0.15, 0.02, 0.65])  
+cax2 = fig.add_axes([0.77, 0.15, 0.012, 0.55])
 cbar_m2 = plt.colorbar(surf2, cax=cax2, cmap=cmap_m2, orientation='vertical')
 cbar_m2.set_label('Model M2')
 
-cax3 = fig.add_axes([0.92, 0.15, 0.02, 0.65])  
+cax3 = fig.add_axes([0.82, 0.15, 0.012, 0.55])
 cbar_m3 = plt.colorbar(surf3, cax=cax3, cmap=cmap_m3, orientation='vertical')
 cbar_m3.set_label('Model M3')
 
+# Show the plot
 plt.show()
 
 # Find the maximum percentage and its corresponding x and y values for each model
