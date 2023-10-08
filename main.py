@@ -181,6 +181,34 @@ fig.suptitle('Comparison of Cosmic Web Networks', fontsize=16)
 plt.tight_layout()
 plt.show()
 
+# DEGREE DISTRIBUTIONS (IN-DEGREE FOR M2, M3 SINCE DIRECTED GRAPH)
+# Create subplots with 1 row and 3 columns
+fig, axes = plt.subplots(1, 3, figsize=(18, 6))
+
+colors = ['b', 'r', 'g']  # Use different colors for each model
+labels = ['M1', 'M2', 'M3']
+
+for i, (G, model_name, color, label) in enumerate(zip([G_m1, G_m2, G_m3], labels, colors, labels)):
+    ax = axes[i]  # Select the appropriate subplot
+    if model_name == 'M1':  # Use degree for M1
+        degrees = dict(G.degree()).values()
+    else:
+        degrees = dict(G.in_degree()).values()  # Use in-degree for M2, M3 since they're directed
+    ax.hist(list(degrees), bins=30, alpha=0.5, label=model_name, color=color)
+
+    ax.set_xlabel('Degree')
+    ax.set_ylabel('Frequency')
+    ax.set_title(f'Degree Distribution - {model_name}')
+    ax.legend()
+
+    # Add a legend with a shadow for better readability
+    legend = ax.legend()
+    legend.get_frame().set_facecolor('white')
+    legend.get_frame().set_edgecolor('black')
+
+plt.tight_layout()
+plt.show()
+
 # AVERAGE CLUSTERING COEFFICIENT, SIZE OF GIANT STRONGLY CONNECTED COMPONENT AS A FUNCTION OF R/N
 # Define a range of values for R or N
 param_values = range(0, 21)
